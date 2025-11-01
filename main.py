@@ -10,7 +10,8 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
 import numpy as np
 from tqdm.auto import tqdm 
-from model_functions import create_model, train_model, test_model, GLOBAL_TEST_DATA 
+from model_functions import create_model, train_model, test_model, predict_single_image
+import model_functions 
 from data_functions import load_existing_model
 
 aidapearson_ocr_data_path = kagglehub.dataset_download('aidapearson/ocr-data')
@@ -18,6 +19,7 @@ print(f'Data source import complete. Path: {aidapearson_ocr_data_path}')
 
 # --- Configuraciones ---
 BASE_PATH = 'C:/Users/oscal/.cache/kagglehub/datasets/aidapearson/ocr-data/versions/36'
+EXTRAS_PATH = os.path.join(BASE_PATH, 'extras')
 BATCH_DIR = 'batch_1'
 IMAGE_SIZE = 600
 NUM_CLASSES = 91 # Número de tokens de LaTeX posibles
@@ -77,13 +79,13 @@ def main():
         print("\nEvaluación completada.")
     
     # --- PREDICCIÓN DE EJEMPLO ---
-    if GLOBAL_TEST_DATA:
+    if model_functions.GLOBAL_TEST_DATA:
         print("\n--- FUNCIÓN DE PREDICCIÓN ---")
         prediction_action = input("¿Desea realizar una predicción en una imagen de prueba (P) o una imagen individual (I)? [P/I]: ").strip().upper()
         
         if prediction_action == 'P':
             # Predicción en una muestra del conjunto de prueba (la primera muestra)
-            data_sample = GLOBAL_TEST_DATA[0]
+            data_sample = model_functions.GLOBAL_TEST_DATA[0]
             batch_dir = BATCH_DIR
             example_path = os.path.join(BASE_PATH, batch_dir, 'background_images', data_sample['filename'])
         
@@ -100,7 +102,7 @@ def main():
 
         print(' tengo que implementar predict_single_image(trained_model, example_path)')
 
-    print("\nFin del programa.")
+    predict_single_image(trained_model, example_path, IMAGE_SIZE, EXTRAS_PATH)
 
 
 main()

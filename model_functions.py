@@ -1,10 +1,11 @@
 import os
+import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
 from sklearn.model_selection import train_test_split
 import numpy as np
 from tqdm.auto import tqdm # Importamos tqdm directamente
-from data_functions import loadAll, normalizedData
+from data_functions import loadAll, normalizedData, map_tokens_to_latex
 import datetime # Importamos datetime para el timestamp
 
 # --- Definición del Modelo (Seq2Seq: Encoder CNN + Decoder LSTM) ---
@@ -153,3 +154,38 @@ def test_model(model, BASE_PATH, BATCH_DIR, IMAGE_SIZE, MAX_SEQ_LENGTH):
         print("No se pudo evaluar ninguna muestra.")
         
     return model
+
+def predict_single_image(model, image_path, IMAGE_SIZE, EXTRAS_PATH):
+    """
+    Realiza una predicción de la fórmula LaTeX para una sola imagen.
+    """
+    print(f"\nRealizando predicción para: {image_path}")
+    
+    # 1. Cargar y preprocesar la imagen
+    try:
+        image_file = tf.io.read_file(image_path)
+        image = tf.io.decode_image(image_file, channels=3, expand_animations=False)
+    except Exception as e:
+        return f"Error al cargar o decodificar la imagen: {e}"
+
+    image = tf.image.convert_image_dtype(image, tf.float32)
+    image = tf.image.resize(image, [IMAGE_SIZE, IMAGE_SIZE])
+    
+    # Añadir la dimensión de lote (1, 600, 600, 3)
+    image = tf.expand_dims(image, axis=0)
+
+    # 2. Predecir la secuencia completa
+    # La predicción será de forma (1, MAX_SEQ_LENGTH, NUM_CLASSES)
+    predictions = model.predict(image, verbose=0)
+
+    # 3. Decodificar la secuencia
+    # En cada paso de la secuencia (dim 1), tomamos el token con mayor probabilidad (argmax en dim 2)
+    predicted_tokens = np.argmax(predictions[0], axis=1) # Forma: (MAX_SEQ_LENGTH,)
+
+    # 4. Mapear los tokens a la cadena LaTeX
+    latex_formula = map_tokens_to_latex(predicted_tokens, EXTRAS_PATH)
+    
+    print("--- Predicción LaTeX ---")
+    print(latex_formula)
+    
+    return latex_formula
