@@ -8,6 +8,9 @@ from data_functions import loadAll, normalizedData
 import datetime # Importamos datetime para el timestamp
 
 # --- Definición del Modelo (Seq2Seq: Encoder CNN + Decoder LSTM) ---
+GLOBAL_DATA_LIST = None 
+GLOBAL_TRAIN_DATA = None
+GLOBAL_TEST_DATA = None
 
 def create_model(IMAGE_SIZE, RNN_UNITS, MAX_SEQ_LENGTH, NUM_CLASSES):
 
@@ -88,7 +91,6 @@ def train_model(model, BASE_PATH, BATCH_DIR, MAX_SEQ_LENGTH, IMAGE_SIZE, MODEL_S
             continue
 
     # Guardar el modelo 
-    # Guardar el modelo 
     os.makedirs(os.path.dirname(MODEL_SAVE_PATH) or '.', exist_ok=True)
     
     final_save_path = MODEL_SAVE_PATH
@@ -112,10 +114,10 @@ def test_model(model, BASE_PATH, BATCH_DIR, IMAGE_SIZE, MAX_SEQ_LENGTH):
     if GLOBAL_TEST_DATA is None:
         print("El conjunto de prueba no ha sido inicializado. Ejecutando train_model primero...")
         # Llama a loadAll para asegurar que los datos estén cargados, aunque solo para obtener la lista completa
-        _ = loadAll()
+        _ = loadAll(BASE_PATH, BATCH_DIR, MAX_SEQ_LENGTH)
         if GLOBAL_TEST_DATA is None:
              # Si GLOBAL_TEST_DATA sigue siendo None (porque train_model no se llamó), forzamos el split
-            data_list = loadAll()
+            data_list = loadAll(BASE_PATH, BATCH_DIR, MAX_SEQ_LENGTH)
             if not data_list: return 
             _, GLOBAL_TEST_DATA = train_test_split(data_list, test_size=0.2, random_state=42)
 
