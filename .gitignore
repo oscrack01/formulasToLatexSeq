@@ -1,0 +1,7 @@
+# Ignorar entorno virtual
+.venv/
+
+# Ignorar archivos de modelo y datos generados
+*.h5
+output/
+__pycache__/
