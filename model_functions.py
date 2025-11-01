@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 from tqdm.auto import tqdm # Importamos tqdm directamente
 from data_functions import loadAll, normalizedData
+import datetime # Importamos datetime para el timestamp
 
 # --- Definición del Modelo (Seq2Seq: Encoder CNN + Decoder LSTM) ---
 
@@ -57,7 +58,7 @@ def create_model(IMAGE_SIZE, RNN_UNITS, MAX_SEQ_LENGTH, NUM_CLASSES):
 
 # --- Funciones de Entrenamiento y Prueba ---
 
-def train_model(model, BASE_PATH, BATCH_DIR, MAX_SEQ_LENGTH, IMAGE_SIZE):
+def train_model(model, BASE_PATH, BATCH_DIR, MAX_SEQ_LENGTH, IMAGE_SIZE, MODEL_SAVE_PATH):
     global GLOBAL_TRAIN_DATA, GLOBAL_TEST_DATA
     
     print("Iniciando carga y preprocesamiento de datos...")
@@ -87,8 +88,22 @@ def train_model(model, BASE_PATH, BATCH_DIR, MAX_SEQ_LENGTH, IMAGE_SIZE):
             continue
 
     # Guardar el modelo 
-    os.makedirs('../output', exist_ok=True)
-    model.save('../output/math_seq2seq_lstm.h5')
+    # Guardar el modelo 
+    os.makedirs(os.path.dirname(MODEL_SAVE_PATH) or '.', exist_ok=True)
+    
+    final_save_path = MODEL_SAVE_PATH
+    
+    # Lógica para no sobrescribir el archivo
+    if os.path.exists(MODEL_SAVE_PATH):
+        # Si el archivo existe, añade un timestamp
+        timestamp = datetime.datetime.now().strftime("_%Y%m%d_%H%M%S")
+        
+        # Separar el nombre base del sufijo (.h5)
+        base, ext = os.path.splitext(MODEL_SAVE_PATH)
+        final_save_path = base + timestamp + ext
+
+    model.save(final_save_path)
+    print(f"\nModelo guardado en: {final_save_path}")
     return model
 
 def test_model(model, BASE_PATH, BATCH_DIR, IMAGE_SIZE, MAX_SEQ_LENGTH):

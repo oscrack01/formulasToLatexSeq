@@ -80,3 +80,92 @@ def loadAll(BASE_PATH, BATCH_DIR, MAX_SEQ_LENGTH):
     else:
         print(f'Error: Archivo no encontrado en {json_path}')
         return []
+
+def map_tokens_to_latex(token_sequence, TOKEN_MAP):
+    """Convierte una secuencia de índices de token a una cadena LaTeX."""
+    latex_output = []
+    
+    # Convierte el tensor a una lista de Python (aplanada si es necesario)
+    if hasattr(token_sequence, 'numpy'):
+        token_sequence = token_sequence.numpy().flatten()
+
+    for token_index in token_sequence:
+        # El padding (token 0) debe ser ignorado.
+        if token_index == 0: 
+            continue
+        
+        # Mapear el índice al carácter/comando LaTeX
+        latex_char = TOKEN_MAP.get(token_index, '?')
+        latex_output.append(latex_char)
+
+    # Nota: Aquí se necesitaría lógica post-procesamiento para manejar {} y estructuras LaTeX.
+    return ' '.join(latex_output).strip()
+
+
+def load_token_map(EXTRAS_PATH):
+    """Carga e invierte el visible_char_map.json para mapear índice a LaTeX."""
+    global GLOBAL_TOKEN_MAP
+    
+    map_path = os.path.join(EXTRAS_PATH, 'visible_char_map.json')
+    
+    if os.path.exists(map_path):
+        with open(map_path) as f:
+            char_to_index = json.load(f)
+            print("Mapeo de tokens cargado de visible_char_map.json.")
+            
+            # Invertir el diccionario: de LaTeX a Índice a Índice a LaTeX
+            # Ignoramos el token de padding (asumido como 0)
+            index_to_char = {v: k for k, v in char_to_index.items() if v != 0}
+            
+            # El token 0 es padding
+            index_to_char[0] = '' 
+            
+            GLOBAL_TOKEN_MAP = index_to_char
+            return GLOBAL_TOKEN_MAP
+    else:
+        print(f"Error: No se encontró visible_char_map.json en {map_path}. Usando mapeo temporal.")
+        # Usar el mapeo temporal si el archivo no se encuentra
+        return {
+            0: '', 1: '\\limit', 2: '\\infty', 3: 'x', 4: 'y', 5: '=', 6: '2', 7: '{', 8: '}', 
+            9: '\\frac', 10: '(', 11: ')', 12: '+', 13: '-', 14: '1', 15: '0', 16: 'a', 17: 'b', 
+            18: '^', 19: '_', 20: '3', 21: '4', 22: '5', 23: '6', 24: '7', 25: '8', 26: '9', 
+            27: 'z', 28: '\\pi', 29: 'e', 30: 'c', 31: 'd', 32: 'f', 33: 'g', 34: 'h', 35: 'i',
+        }
+
+def map_tokens_to_latex(token_sequence, EXTRAS_PATH):
+    """Convierte una secuencia de índices de token a una cadena LaTeX usando el mapa cargado."""
+    
+    # Asegurar que el mapa esté cargado
+    if GLOBAL_TOKEN_MAP is None:
+        load_token_map(EXTRAS_PATH)
+        
+    latex_output = []
+    
+    if hasattr(token_sequence, 'numpy'):
+        token_sequence = token_sequence.numpy().flatten()
+
+    for token_index in token_sequence:
+        # El padding (token 0) es mapeado a una cadena vacía
+        latex_char = GLOBAL_TOKEN_MAP.get(token_index, f'?({token_index})')
+        
+        # Ignorar padding explícitamente y caracteres desconocidos
+        if latex_char == '' or latex_char.startswith('?'): 
+            continue
+        
+        latex_output.append(latex_char)
+
+    # El post-procesamiento real de LaTeX para remover espacios (ej. '\frac { 1 } { x }')
+    # es complejo y está fuera del alcance de la predicción de secuencia de tokens.
+    # Dejamos los tokens separados por espacio por simplicidad.
+    return ' '.join(latex_output).strip()
+
+def load_existing_model(model_path):
+    """Carga un modelo Keras (.h5) desde una ruta específica."""
+    try:
+        # Usamos custom_objects={'Model': Model} si hay problemas, pero Keras lo maneja
+        model = tf.keras.models.load_model(model_path)
+        print(f"\nModelo cargado exitosamente desde: {model_path}")
+        return model
+    except Exception as e:
+        print(f"\nERROR al cargar el modelo desde {model_path}: {e}")
+        return None
