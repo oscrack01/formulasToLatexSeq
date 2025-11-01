@@ -1,21 +1,19 @@
 import kagglehub
 import os
-import json
-import requests
-import shutil
-import tensorflow as tf
-from tensorflow.keras import layers
-from tensorflow.keras.models import Model
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from sklearn.model_selection import train_test_split
-import numpy as np
 from tqdm.auto import tqdm 
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0' # Desactiva las optimizaciones oneDNN
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # (Opcional) Oculta otros mensajes informativos de TF
+import tensorflow as tf
 from model_functions import create_model, train_model, test_model, predict_single_image
 import model_functions 
 from data_functions import load_existing_model
+import warnings 
 
 aidapearson_ocr_data_path = kagglehub.dataset_download('aidapearson/ocr-data')
 print(f'Data source import complete. Path: {aidapearson_ocr_data_path}') 
+
+# --- Warnings ---
+warnings.filterwarnings('ignore', category=Warning, module='tensorflow')
 
 # --- Configuraciones ---
 BASE_PATH = 'C:/Users/oscal/.cache/kagglehub/datasets/aidapearson/ocr-data/versions/36'
@@ -61,9 +59,7 @@ def main():
             print("El sistema no puede continuar sin un modelo. Saliendo.")
             return
 
-        # Para evaluar o predecir, necesitamos cargar el conjunto de prueba
-        print("Cargando datos de prueba para evaluación/predicción...")
-        test_model(trained_model, BASE_PATH, BATCH_DIR, IMAGE_SIZE, MAX_SEQ_LENGTH) # Llama a test_model para cargar GLOBAL_TEST_DATA
+        print("Modelo cargado. Listo para predicciones individuales (I).")
 
     else:
         print("Opción no válida. Saliendo.")
@@ -71,38 +67,53 @@ def main():
 
 
     
-    # --- EVALUACIÓN Y PREDICCIÓN (Común a ambos flujos) ---
+# --- EVALUACIÓN Y PREDICCIÓN (Común a ambos flujos) ---
     if action == 'T':
+        # El flujo 'T' todavía necesita evaluación, y la evaluación carga los datos de prueba
         print("\nEntrenamiento completado.")
-        # La evaluación ya se hizo parcialmente dentro de load_existing_model para cargar GLOBAL_TEST_DATA si fue necesario
         test_model(trained_model, BASE_PATH, BATCH_DIR, IMAGE_SIZE, MAX_SEQ_LENGTH)
         print("\nEvaluación completada.")
+
     
     # --- PREDICCIÓN DE EJEMPLO ---
-    if model_functions.GLOBAL_TEST_DATA:
-        print("\n--- FUNCIÓN DE PREDICCIÓN ---")
-        prediction_action = input("¿Desea realizar una predicción en una imagen de prueba (P) o una imagen individual (I)? [P/I]: ").strip().upper()
+    # Usamos mf.GLOBAL_TEST_DATA para acceder al valor actual
+    print("\n--- FUNCIÓN DE PREDICCIÓN ---")
+    prediction_action = input("¿Desea realizar una predicción en una imagen de prueba (P), una imagen individual (I), o Salir (S)? [P/I/S]: ").strip().upper()
+    
+    if prediction_action == 'P':
+        # --- NUEVA LÓGICA DE CARGA CONDICIONAL ---
+        if model_functions.GLOBAL_TEST_DATA is None:
+            print("Cargando datos de prueba. Esto puede tomar tiempo...")
+            # Forzamos la carga y el split llamando a test_model
+            test_model(trained_model, BASE_PATH, BATCH_DIR, IMAGE_SIZE, MAX_SEQ_LENGTH) 
         
-        if prediction_action == 'P':
+        if model_functions.GLOBAL_TEST_DATA:
             # Predicción en una muestra del conjunto de prueba (la primera muestra)
             data_sample = model_functions.GLOBAL_TEST_DATA[0]
             batch_dir = BATCH_DIR
             example_path = os.path.join(BASE_PATH, batch_dir, 'background_images', data_sample['filename'])
-        
-        elif prediction_action == 'I':
-            # Predicción en una imagen individual
-            example_path = input("Ingrese la ruta completa de la imagen a predecir (ej: /path/to/my/image.png): ").strip()
-            if not os.path.exists(example_path):
-                print(f"ERROR: La ruta de imagen '{example_path}' no existe. Saliendo de la predicción.")
-                return
-
         else:
-            print("Opción de predicción no válida.")
+            print("ERROR: No se pudo cargar el conjunto de prueba. Saliendo de la predicción.")
+            return
+            
+    elif prediction_action == 'I':
+        # Predicción en una imagen individual (no requiere GLOBAL_TEST_DATA)
+        example_path = input("Ingrese la ruta completa de la imagen a predecir (ej: /path/to/my/image.png): ").strip()
+        if not os.path.exists(example_path):
+            print(f"ERROR: La ruta de imagen '{example_path}' no existe. Saliendo de la predicción.")
             return
 
-        print(' tengo que implementar predict_single_image(trained_model, example_path)')
+    elif prediction_action == 'S':
+        print("\nSaliendo del programa.")
+        return
 
+    else:
+        print("Opción de predicción no válida. Saliendo.")
+        return
+
+    # Aquí se ejecuta la predicción si la opción fue 'P' o 'I'
     predict_single_image(trained_model, example_path, IMAGE_SIZE, EXTRAS_PATH)
 
+    print("\nFin del programa.")
 
 main()

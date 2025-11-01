@@ -88,6 +88,9 @@ def load_existing_model(model_path):
     try:
         # Usamos custom_objects={'Model': Model} si hay problemas, pero Keras lo maneja
         model = tf.keras.models.load_model(model_path)
+        model.compile(optimizer='adam',
+                      loss='sparse_categorical_crossentropy',
+                      metrics=['accuracy'])
         print(f"\nModelo cargado exitosamente desde: {model_path}")
         return model
     except Exception as e:
