@@ -34,18 +34,26 @@ def create_model(IMAGE_SIZE, RNN_UNITS, MAX_SEQ_LENGTH, NUM_CLASSES):
     context_vector = layers.Dense(RNN_UNITS, activation='relu', name='context_vector')(x)
 
     # --- DECODER (SECUENCIA) ---
+    # 1. Entrada de tokens (la secuencia de tokens en el paso de tiempo t)
+    # NOTA: En este diseño, la entrada de tokens se convierte en la etiqueta para el entrenamiento
+    # Para inferencia, aún se requiere un bucle auto-regresivo fuera del modelo Keras.
+    decoder_input = layers.Input(shape=(MAX_SEQ_LENGTH,), dtype='int32', name='token_input')
 
-    # El Decoder debe tomar el vector de contexto del Encoder y generar una secuencia.
-    # Para esto, el vector de contexto se repite MAX_SEQ_LENGTH veces.
-    # Forma: (Batch_size, RNN_UNITS) -> (Batch_size, MAX_SEQ_LENGTH, RNN_UNITS)
+    # 2. Embedding de los tokens de entrada
+    x = layers.Embedding(NUM_CLASSES, RNN_UNITS, mask_zero=True)(decoder_input)
+
+    # 3. Concatenar el vector de contexto a CADA paso de la secuencia de tokens
+    # Forma del contexto: (Batch_size, 1, RNN_UNITS). Lo repetimos para que coincida con la secuencia
     repeated_context = layers.RepeatVector(MAX_SEQ_LENGTH)(context_vector)
+    
+    # Concatenar el contexto y el embedding de tokens
+    # Forma final: (Batch_size, MAX_SEQ_LENGTH, 2 * RNN_UNITS)
+    x = layers.Concatenate(axis=-1)([x, repeated_context]) # Concatenamos el embedding con el contexto
 
-    # Capa LSTM: Toma el vector de contexto repetido y lo procesa secuencialmente
-    # Retorna la secuencia completa (return_sequences=True)
-    decoder_lstm = layers.LSTM(RNN_UNITS, return_sequences=True, name='decoder_lstm')(repeated_context)
+    # 4. Capa LSTM: Ahora usa la información del token anterior (a través de la secuencia de entrada)
+    decoder_lstm = layers.LSTM(RNN_UNITS, return_sequences=True, name='decoder_lstm')(x)
 
-    # Capa TimeDistributed: Aplica una capa Dense (clasificador) en CADA paso de la secuencia
-    # Salida final: (Batch_size, MAX_SEQ_LENGTH, NUM_CLASSES)
+    # 5. Salida TimeDistributed
     decoder_output = layers.TimeDistributed(
         layers.Dense(NUM_CLASSES, activation='softmax'),
         name='token_output'
