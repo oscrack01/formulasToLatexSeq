@@ -4,7 +4,7 @@ from tqdm.auto import tqdm
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0' # Desactiva las optimizaciones oneDNN
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # (Opcional) Oculta otros mensajes informativos de TF
 import tensorflow as tf
-from model_functions import create_model, train_model, test_model, predict_single_image
+from model_functions import create_model, train_model, train_model_full, test_model, predict_single_image
 import model_functions 
 from data_functions import load_existing_model
 import warnings 
@@ -23,7 +23,7 @@ IMAGE_SIZE = 600
 NUM_CLASSES = 91 # Número de tokens de LaTeX posibles
 MAX_SEQ_LENGTH = 100 # Longitud máxima de la secuencia de salida (ajustar según el dataset)
 RNN_UNITS = 128 # Unidades en la capa LSTM
-MODEL_SAVE_PATH = '../output/math_seq2seq_lstm.h5' # Ruta del modelo por defecto
+MODEL_SAVE_PATH = '../output/math_seq2seq_lstm.keras' # Ruta del modelo por defecto
 
 # --- Función Principal ---
 
@@ -41,11 +41,36 @@ def main():
     
     if action == 'T':
         # --- FLUJO DE ENTRENAMIENTO ---
-        print("Modo: ENTRENAMIENTO seleccionado. Se entrenará en los 10 batches.")
-        # Inicializar el modelo
+        
+        # 1. Preguntar por la opción de entrenamiento
+        train_option = input("Seleccione el modo de entrenamiento:\n"
+                             "  (R) Rápido: Usar solo batch_1 para entrenamiento.\n"
+                             "  (P) Pesado: Iterar y entrenar con los 10 batches.\n"
+                             "[R/P]: ").strip().upper()
+
+        if train_option not in ('R', 'P'):
+            print("Opción de entrenamiento no válida. Saliendo.")
+            return
+
+        print("Inicializando el modelo con arquitectura Seq2Seq de doble entrada...")
+        
+        # 2. Inicializar el modelo con la arquitectura de doble entrada
         model = create_model(IMAGE_SIZE, RNN_UNITS, MAX_SEQ_LENGTH, NUM_CLASSES)
         model.summary()
-        trained_model = train_model(model)
+        
+        # 3. Llamar a la función de entrenamiento correcta
+        if train_option == 'R':
+            print(f"Modo: ENTRENAMIENTO RÁPIDO seleccionado. Se entrenará en {BATCH_DIR}.")
+            # Se pasan todos los parámetros requeridos
+            trained_model = train_model(model, BASE_PATH, BATCH_DIR, MAX_SEQ_LENGTH, IMAGE_SIZE, MODEL_SAVE_PATH) 
+        
+        elif train_option == 'P':
+            print("Modo: ENTRENAMIENTO PESADO seleccionado. Se entrenará en los 10 batches.")
+            # Se usa la nueva función (BATCH_DIR no es necesario ya que itera internamente)
+            trained_model = train_model_full(model, BASE_PATH, MAX_SEQ_LENGTH, IMAGE_SIZE, MODEL_SAVE_PATH)
+            
+        else: # (Esto ya se maneja arriba, pero como fallback)
+            return
         
     elif action == 'C':
         # --- FLUJO DE CARGA ---
@@ -69,9 +94,17 @@ def main():
     
 # --- EVALUACIÓN Y PREDICCIÓN (Común a ambos flujos) ---
     if action == 'T':
-        # El flujo 'T' todavía necesita evaluación, y la evaluación carga los datos de prueba
-        print("\nEntrenamiento completado.")
-        test_model(trained_model, BASE_PATH, BATCH_DIR, IMAGE_SIZE, MAX_SEQ_LENGTH)
+        if train_option == 'R':
+            print("\nEntrenamiento rápido completado. Evaluando en el 20% de 'batch_1'.")
+            test_model(trained_model, BASE_PATH, BATCH_DIR, IMAGE_SIZE, MAX_SEQ_LENGTH)
+        elif train_option == 'P':
+             # En el modo pesado, GLOBAL_TEST_DATA será el 20% de todos los 10 batches
+            print("\nEntrenamiento pesado completado. Evaluando en el 20% de los 10 batches.")
+            # El BATCH_DIR no es relevante aquí si GLOBAL_TEST_DATA ya está lleno, 
+            # pero lo necesitamos para que `test_model` cargue los datos si es necesario.
+            # Usaremos 'batch_1' como dummy, ya que test_model busca GLOBAL_TEST_DATA
+            test_model(trained_model, BASE_PATH, 'batch_1', IMAGE_SIZE, MAX_SEQ_LENGTH) 
+        
         print("\nEvaluación completada.")
 
     
@@ -112,7 +145,7 @@ def main():
         return
 
     # Aquí se ejecuta la predicción si la opción fue 'P' o 'I'
-    predict_single_image(trained_model, example_path, IMAGE_SIZE, EXTRAS_PATH)
+    predict_single_image(trained_model, example_path, IMAGE_SIZE, EXTRAS_PATH, MAX_SEQ_LENGTH)
 
     print("\nFin del programa.")
 

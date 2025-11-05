@@ -71,31 +71,65 @@ def normalizedData(data, BASE_PATH, BATCH_DIR, IMAGE_SIZE, MAX_SEQ_LENGTH):
 
 def loadAll(BASE_PATH, BATCH_DIR, MAX_SEQ_LENGTH):
     """Carga el JSON y devuelve la lista de datos."""
-    json_path = os.path.join(BASE_PATH, BATCH_DIR, 'JSON', 'kaggle_data_1.json')
+    json_dir = os.path.join(BASE_PATH, BATCH_DIR, 'JSON')
+    
+    # Busca el archivo JSON dentro del directorio 'JSON'
+    json_filename = None
+    
+    if os.path.exists(json_dir):
+        # Itera sobre los archivos en el directorio 'JSON'
+        for filename in os.listdir(json_dir):
+            # Asume que el archivo de datos tiene 'data' en su nombre y termina en '.json'
+            if 'data' in filename and filename.endswith('.json'):
+                json_filename = filename
+                break # Encontramos el archivo, lo usamos
 
-    if os.path.exists(json_path):
+    if json_filename:
+        json_path = os.path.join(json_dir, json_filename)
         with open(json_path) as f:
             raw_data = json.load(f)
-            print('Archivo JSON cargado.')
+            # Imprime el nombre real del archivo cargado para depuración
+            print(f'Archivo JSON "{json_filename}" cargado.') 
             return create_data_frame(raw_data, MAX_SEQ_LENGTH)
     else:
-        print(f'Error: Archivo no encontrado en {json_path}')
+        # Aquí también mostramos la ruta para facilitar la depuración
+        print(f'Error: No se encontró ningún archivo JSON que contenga "data" en {json_dir}')
         return []
 
 
 def load_existing_model(model_path):
     """Carga un modelo Keras (.h5) desde una ruta específica."""
     try:
-        # Usamos custom_objects={'Model': Model} si hay problemas, pero Keras lo maneja
-        model = tf.keras.models.load_model(model_path)
+        # Añade todas las operaciones internas de TF que Keras podría haber serializado
+        custom_objects = {
+            # Se ha visto que estas son problemáticas en la serialización HDF5:
+            'NotEqual': tf.math.not_equal,
+            'ZerosLike': tf.zeros_like,
+            'ExpandDims': tf.expand_dims,
+            'LogicalOr': tf.math.logical_or,
+            'OnesLike': tf.ones_like,
+            'Any': tf.reduce_any, # Usar reduce_any en lugar de experimental.numpy.any
+            'Concatenate': tf.keras.layers.Concatenate, # A veces Concatenate es el problema
+            # Si se usó una función Lambda, también debe registrarse.
+        }
+        
+        # Usamos custom_object_scope para registrar estas funciones al cargar
+        with tf.keras.utils.custom_object_scope(custom_objects):
+            # Cargar el modelo
+            model = tf.keras.models.load_model(model_path)
+            
+        # Re-compilar el modelo es crucial, usando la función de pérdida correcta.
+        # Asumimos que quieres usar la versión con ignore_index=0 para corregir el 100% accuracy.
         model.compile(optimizer='adam',
-                      loss='sparse_categorical_crossentropy',
+                      loss=tf.keras.losses.SparseCategoricalCrossentropy(ignore_index=0),
                       metrics=['accuracy'])
+        
         print(f"\nModelo cargado exitosamente desde: {model_path}")
         return model
     except Exception as e:
         print(f"\nERROR al cargar el modelo desde {model_path}: {e}")
         return None
+
 
 def load_token_map(EXTRAS_PATH):
     """Carga e invierte el visible_char_map.json para mapear índice a LaTeX."""
